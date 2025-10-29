@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mike's Tool - Week Data Visualizer</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo-section">
+                    <div class="logo-box">M</div>
+                    <div class="logo-text">
+                        <div class="logo-title">MIKE'S</div>
+                        <div class="logo-subtitle">JUST FOR MEN</div>
+                    </div>
+                </div>
+                <h1 class="page-title">Mikes Tool</h1>
+            </div>
+        </div>
+    </header>
+
+    <!-- Tabs -->
+    <nav class="tabs">
+        <div class="container">
+            <div class="tabs-wrapper">
+                <button class="tab-button active" data-tab="visualizer">Week Visualizer</button>
+                <button class="tab-button" data-tab="analysis">Data Analyse</button>
+                <button class="tab-button" data-tab="export">Exporteren</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Content -->
+    <main class="main-content">
+        <div class="container">
+            <!-- Visualizer Tab -->
+            <div class="tab-content active" id="visualizer">
+                <!-- File Upload -->
+                <div class="card">
+                    <h2 class="card-title">Upload Excel bestanden per weeknummer</h2>
+                    <div class="file-upload-section">
+                        <label for="fileInput" class="file-button">Bestand kiezen</label>
+                        <input type="file" id="fileInput" multiple accept=".xlsx,.xls" style="display: none;">
+                        <span class="file-status" id="fileStatus">Geen bestand gekozen</span>
+                    </div>
+                </div>
+
+                <!-- Files List -->
+                <div class="card" id="filesListCard" style="display: none;">
+                    <h3 class="card-title">Geüploade bestanden</h3>
+                    <div id="filesList"></div>
+                </div>
+
+                <!-- Week Selection -->
+                <div class="card" id="weekSelectionCard" style="display: none;">
+                    <h3 class="card-title">Selecteer weken om te vergelijken</h3>
+                    <div id="weekButtons" class="week-buttons"></div>
+                </div>
+
+                <!-- Chart Settings -->
+                <div class="card" id="chartSettingsCard" style="display: none;">
+                    <h3 class="card-title">Visualisatie instellingen</h3>
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <label class="setting-label">Te visualiseren data kolom</label>
+                            <select id="dataKeySelect" class="setting-select"></select>
+                        </div>
+                        <div class="setting-item">
+                            <label class="setting-label">Type grafiek</label>
+                            <select id="chartTypeSelect" class="setting-select">
+                                <option value="bar">Staafdiagram</option>
+                                <option value="line">Lijndiagram</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chart -->
+                <div class="card" id="chartCard" style="display: none;">
+                    <div class="chart-header">
+                        <h3 class="card-title">Week vergelijking</h3>
+                        <button id="exportButton" class="export-button">Download als Excel</button>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="myChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div class="card empty-state" id="emptyState">
+                    <p class="empty-text">Selecteer een bestand om te beginnen</p>
+                </div>
+            </div>
+
+            <!-- Analysis Tab -->
+            <div class="tab-content" id="analysis">
+                <div class="card empty-state">
+                    <p class="empty-text">Data analyse functionaliteit</p>
+                </div>
+            </div>
+
+            <!-- Export Tab -->
+            <div class="tab-content" id="export">
+                <div class="card empty-state">
+                    <p class="empty-text">Export functionaliteit</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
