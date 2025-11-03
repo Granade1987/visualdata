@@ -32,7 +32,7 @@ fileInput.addEventListener('change', async (e) => {
             const text = await file.text();
             Papa.parse(text, {
                 header: true,
-                dynamicTyping: true,
+                dynamicTyping: false, // Keep as strings initially
                 skipEmptyLines: true,
                 complete: (results) => {
                     data = results.data;
@@ -48,7 +48,7 @@ fileInput.addEventListener('change', async (e) => {
             const workbook = XLSX.read(arrayBuffer);
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
-            data = XLSX.utils.sheet_to_json(worksheet);
+            data = XLSX.utils.sheet_to_json(worksheet, { raw: false }); // Keep values as strings
             processData();
         }
     } catch (error) {
@@ -65,7 +65,26 @@ function processData() {
         return;
     }
 
-    columns = Object.keys(data[0]).map(key => key.trim());
+    // Clean column names (trim whitespace)
+    const rawColumns = Object.keys(data[0]);
+    columns = rawColumns.map(key => key.trim());
+    
+    // Create a mapping of cleaned names to original names
+    const columnMapping = {};
+    rawColumns.forEach((col, i) => {
+        columnMapping[columns[i]] = col;
+    });
+    
+    // Clean data keys
+    data = data.map(row => {
+        const cleanRow = {};
+        Object.keys(row).forEach(key => {
+            const cleanKey = key.trim();
+            cleanRow[cleanKey] = row[key];
+        });
+        return cleanRow;
+    });
+
     selectedYColumns = [];
 
     fileStatus.textContent = `${fileName} - ${data.length} rijen geladen`;
@@ -80,12 +99,14 @@ function updateColumnSelects() {
     xAxisSelect.innerHTML = '<option value="">Selecteer kolom...</option>' +
         columns.map(col => `<option value="${col}">${col}</option>`).join('');
 
-    yAxisColumns.innerHTML = columns.map(col => `
+    yAxisColumns.innerHTML = columns.map(col => {
+        const escapedCol = col.replace(/'/g, "\\'");
+        return `
         <div class="column-checkbox">
-            <input type="checkbox" id="y-${col}" value="${col}" onchange="toggleYColumn('${col}')">
-            <label for="y-${col}">${col}</label>
+            <input type="checkbox" id="y-${escapedCol}" value="${col}" onchange="toggleYColumn('${escapedCol}')">
+            <label for="y-${escapedCol}">${col}</label>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 // Toggle Y Column
@@ -102,6 +123,17 @@ function toggleYColumn(column) {
 // Event Listeners
 xAxisSelect.addEventListener('change', updateChart);
 chartTypeSelect.addEventListener('change', updateChart);
+
+// Check if column contains numeric data
+function isNumericColumn(columnName) {
+    const values = data.map(row => row[columnName]);
+    const numericValues = values.filter(v => {
+        if (v === null || v === undefined || v === '') return false;
+        const num = parseFloat(String(v).replace(',', '.'));
+        return !isNaN(num);
+    });
+    return numericValues.length > values.length * 0.5; // At least 50% numeric
+}
 
 // Update Chart
 function updateChart() {
@@ -125,19 +157,34 @@ function updateChart() {
         '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#84cc16'
     ];
 
+    // Get all unique x-axis values in order
+    const xValues = [...new Set(data.map(row => row[xColumn]))].filter(v => v !== null && v !== undefined && v !== '');
+
     const datasets = selectedYColumns.map((yCol, index) => {
         const color = colors[index % colors.length];
+        
+        // Create data points for each x value
+        const dataPoints = xValues.map(xVal => {
+            const row = data.find(r => r[xColumn] === xVal);
+            if (!row) return null;
+            
+            const yValue = row[yCol];
+            if (yValue === null || yValue === undefined || yValue === '') return null;
+            
+            // Try to parse as number (handle both . and , as decimal separator)
+            const numValue = parseFloat(String(yValue).replace(',', '.'));
+            return isNaN(numValue) ? null : numValue;
+        });
+
         return {
             label: yCol,
-            data: data.map(row => ({
-                x: row[xColumn],
-                y: parseFloat(row[yCol])
-            })).filter(point => !isNaN(point.y)),
+            data: dataPoints,
             backgroundColor: color,
             borderColor: color,
             borderWidth: 2,
             fill: false,
-            tension: 0.1
+            tension: 0.1,
+            spanGaps: true // Connect line even if there are null values
         };
     });
 
@@ -146,6 +193,7 @@ function updateChart() {
     chart = new Chart(ctx, {
         type: chartType,
         data: {
+            labels: xValues,
             datasets: datasets
         },
         options: {
@@ -155,14 +203,21 @@ function updateChart() {
                 legend: {
                     display: true,
                     position: 'top'
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
                 }
             },
             scales: {
                 x: {
-                    type: 'category',
                     title: {
                         display: true,
                         text: xColumn
+                    },
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 0
                     }
                 },
                 y: {
