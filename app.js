@@ -218,7 +218,7 @@ function updateChart() {
                     ticks: {
                         maxRotation: 90, // Aangepast naar 90 graden (verticaal)
                         minRotation: 90,
-                        align: 'end',    // Tekst wordt 'op zijn kant' uitgelijnd
+                        align: 'center',    // Tekst wordt 'op zijn kant' uitgelijnd
                         font: {
                             size: 10
                         }
