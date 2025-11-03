@@ -216,8 +216,12 @@ function updateChart() {
                         text: xColumn
                     },
                     ticks: {
-                        maxRotation: 45,
-                        minRotation: 0
+                        maxRotation: 90, // Aangepast naar 90 graden (verticaal)
+                        minRotation: 90,
+                        align: 'end',    // Tekst wordt 'op zijn kant' uitgelijnd
+                        font: {
+                            size: 10
+                        }
                     }
                 },
                 y: {
