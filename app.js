@@ -1,243 +1,216 @@
 // State
-let files = [];
-let selectedWeeks = [];
-let availableKeys = [];
+let data = [];
+let columns = [];
+let selectedYColumns = [];
 let chart = null;
+let fileName = '';
 
 // DOM Elements
 const fileInput = document.getElementById('fileInput');
 const fileStatus = document.getElementById('fileStatus');
-const filesListCard = document.getElementById('filesListCard');
-const filesList = document.getElementById('filesList');
-const weekSelectionCard = document.getElementById('weekSelectionCard');
-const weekButtons = document.getElementById('weekButtons');
-const chartSettingsCard = document.getElementById('chartSettingsCard');
-const dataKeySelect = document.getElementById('dataKeySelect');
-const chartTypeSelect = document.getElementById('chartTypeSelect');
+const settingsCard = document.getElementById('settingsCard');
 const chartCard = document.getElementById('chartCard');
 const emptyState = document.getElementById('emptyState');
+const xAxisSelect = document.getElementById('xAxisSelect');
+const yAxisColumns = document.getElementById('yAxisColumns');
+const chartTypeSelect = document.getElementById('chartTypeSelect');
 const exportButton = document.getElementById('exportButton');
-
-// Tab Navigation
-document.querySelectorAll('.tab-button').forEach(button => {
-    button.addEventListener('click', () => {
-        const tabName = button.dataset.tab;
-        
-        document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-        button.classList.add('active');
-        
-        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-        document.getElementById(tabName).classList.add('active');
-    });
-});
+const resetButton = document.getElementById('resetButton');
 
 // File Upload
 fileInput.addEventListener('change', async (e) => {
-    const uploadedFiles = Array.from(e.target.files);
-    
-    for (const file of uploadedFiles) {
-        try {
-            const data = await file.arrayBuffer();
-            const workbook = XLSX.read(data);
+    const file = e.target.files[0];
+    if (!file) return;
+
+    fileName = file.name;
+    fileStatus.textContent = `Bezig met laden: ${fileName}`;
+
+    try {
+        const fileExtension = file.name.split('.').pop().toLowerCase();
+        
+        if (fileExtension === 'csv') {
+            const text = await file.text();
+            Papa.parse(text, {
+                header: true,
+                dynamicTyping: true,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    data = results.data;
+                    processData();
+                },
+                error: (error) => {
+                    console.error('CSV parse error:', error);
+                    alert(`Fout bij het lezen van ${file.name}`);
+                }
+            });
+        } else {
+            const arrayBuffer = await file.arrayBuffer();
+            const workbook = XLSX.read(arrayBuffer);
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet);
-            
-            const weekMatch = file.name.match(/week[\s_-]?(\d+)/i);
-            let weekNumber = weekMatch ? weekMatch[1] : prompt(`Voer weeknummer in voor ${file.name}:`);
-            
-            if (weekNumber) {
-                weekNumber = parseInt(weekNumber);
-                files.push({
-                    id: Date.now() + Math.random(),
-                    name: file.name,
-                    week: weekNumber,
-                    data: jsonData
-                });
-                
-                if (jsonData.length > 0) {
-                    const keys = Object.keys(jsonData[0]);
-                    keys.forEach(key => {
-                        if (!availableKeys.includes(key)) {
-                            availableKeys.push(key);
-                        }
-                    });
-                }
-            }
-        } catch (error) {
-            console.error('Error reading file:', error);
-            alert(`Fout bij het lezen van ${file.name}`);
+            data = XLSX.utils.sheet_to_json(worksheet);
+            processData();
         }
+    } catch (error) {
+        console.error('Error reading file:', error);
+        alert(`Fout bij het lezen van ${file.name}`);
+        fileStatus.textContent = 'Fout bij het laden';
     }
-    
-    updateUI();
 });
 
-// Remove File
-function removeFile(id) {
-    const file = files.find(f => f.id === id);
-    if (file) {
-        selectedWeeks = selectedWeeks.filter(w => w !== file.week);
+// Process Data
+function processData() {
+    if (data.length === 0) {
+        alert('Het bestand bevat geen data');
+        return;
     }
-    files = files.filter(f => f.id !== id);
-    updateUI();
+
+    columns = Object.keys(data[0]).map(key => key.trim());
+    selectedYColumns = [];
+
+    fileStatus.textContent = `${fileName} - ${data.length} rijen geladen`;
+    emptyState.style.display = 'none';
+    settingsCard.style.display = 'block';
+
+    updateColumnSelects();
 }
 
-// Toggle Week Selection
-function toggleWeek(week) {
-    if (selectedWeeks.includes(week)) {
-        selectedWeeks = selectedWeeks.filter(w => w !== week);
+// Update Column Selects
+function updateColumnSelects() {
+    xAxisSelect.innerHTML = '<option value="">Selecteer kolom...</option>' +
+        columns.map(col => `<option value="${col}">${col}</option>`).join('');
+
+    yAxisColumns.innerHTML = columns.map(col => `
+        <div class="column-checkbox">
+            <input type="checkbox" id="y-${col}" value="${col}" onchange="toggleYColumn('${col}')">
+            <label for="y-${col}">${col}</label>
+        </div>
+    `).join('');
+}
+
+// Toggle Y Column
+function toggleYColumn(column) {
+    const index = selectedYColumns.indexOf(column);
+    if (index > -1) {
+        selectedYColumns.splice(index, 1);
     } else {
-        selectedWeeks.push(week);
-        selectedWeeks.sort((a, b) => a - b);
+        selectedYColumns.push(column);
     }
-    updateWeekButtons();
     updateChart();
 }
 
-// Update UI
-function updateUI() {
-    if (files.length === 0) {
-        fileStatus.textContent = 'Geen bestand gekozen';
-        filesListCard.style.display = 'none';
-        weekSelectionCard.style.display = 'none';
-        chartSettingsCard.style.display = 'none';
-        chartCard.style.display = 'none';
-        emptyState.style.display = 'block';
-    } else {
-        fileStatus.textContent = `${files.length} bestand(en) geselecteerd`;
-        emptyState.style.display = 'none';
-        
-        filesListCard.style.display = 'block';
-        filesList.innerHTML = files.map(file => `
-            <div class="file-item">
-                <div class="file-info">
-                    <span class="file-week">Week ${file.week}</span>
-                    <span class="file-name">${file.name}</span>
-                    <span class="file-rows">(${file.data.length} rijen)</span>
-                </div>
-                <button class="file-remove" onclick="removeFile(${file.id})">Verwijder</button>
-            </div>
-        `).join('');
-        
-        weekSelectionCard.style.display = 'block';
-        updateWeekButtons();
-        
-        if (availableKeys.length > 0) {
-            chartSettingsCard.style.display = 'block';
-            dataKeySelect.innerHTML = availableKeys.map(key => 
-                `<option value="${key}">${key}</option>`
-            ).join('');
-        }
-    }
-}
-
-// Update Week Buttons
-function updateWeekButtons() {
-    const weeks = [...new Set(files.map(f => f.week))].sort((a, b) => a - b);
-    weekButtons.innerHTML = weeks.map(week => `
-        <button class="week-button ${selectedWeeks.includes(week) ? 'selected' : ''}" 
-                onclick="toggleWeek(${week})">
-            Week ${week}
-        </button>
-    `).join('');
-    
-    if (selectedWeeks.length > 0) {
-        updateChart();
-    }
-}
-
-// Get Chart Data
-function getChartData() {
-    const dataKey = dataKeySelect.value;
-    if (!dataKey || selectedWeeks.length === 0) return [];
-    
-    const selectedFiles = files.filter(f => selectedWeeks.includes(f.week));
-    
-    return selectedFiles.map(file => {
-        const values = file.data
-            .map(row => parseFloat(row[dataKey]))
-            .filter(v => !isNaN(v));
-        
-        const average = values.length > 0 
-            ? values.reduce((a, b) => a + b, 0) / values.length 
-            : 0;
-        
-        return {
-            week: `Week ${file.week}`,
-            value: average
-        };
-    }).sort((a, b) => {
-        const weekA = parseInt(a.week.split(' ')[1]);
-        const weekB = parseInt(b.week.split(' ')[1]);
-        return weekA - weekB;
-    });
-}
+// Event Listeners
+xAxisSelect.addEventListener('change', updateChart);
+chartTypeSelect.addEventListener('change', updateChart);
 
 // Update Chart
 function updateChart() {
-    const chartData = getChartData();
-    const dataKey = dataKeySelect.value;
-    const chartType = chartTypeSelect.value;
+    const xColumn = xAxisSelect.value;
     
-    if (chartData.length === 0) {
+    if (!xColumn || selectedYColumns.length === 0) {
         chartCard.style.display = 'none';
         return;
     }
-    
+
     chartCard.style.display = 'block';
-    
+
     const ctx = document.getElementById('myChart').getContext('2d');
     
     if (chart) {
         chart.destroy();
     }
-    
+
+    const colors = [
+        '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
+        '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#84cc16'
+    ];
+
+    const datasets = selectedYColumns.map((yCol, index) => {
+        const color = colors[index % colors.length];
+        return {
+            label: yCol,
+            data: data.map(row => ({
+                x: row[xColumn],
+                y: parseFloat(row[yCol])
+            })).filter(point => !isNaN(point.y)),
+            backgroundColor: color,
+            borderColor: color,
+            borderWidth: 2,
+            fill: false,
+            tension: 0.1
+        };
+    });
+
+    const chartType = chartTypeSelect.value;
+
     chart = new Chart(ctx, {
         type: chartType,
         data: {
-            labels: chartData.map(d => d.week),
-            datasets: [{
-                label: dataKey,
-                data: chartData.map(d => d.value),
-                backgroundColor: chartType === 'bar' ? '#3b82f6' : 'transparent',
-                borderColor: '#3b82f6',
-                borderWidth: chartType === 'line' ? 2 : 1
-            }]
+            datasets: datasets
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    display: true
+                    display: true,
+                    position: 'top'
                 }
             },
             scales: {
+                x: {
+                    type: 'category',
+                    title: {
+                        display: true,
+                        text: xColumn
+                    }
+                },
                 y: {
-                    beginAtZero: true
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: selectedYColumns.join(', ')
+                    }
                 }
             }
         }
     });
 }
 
-// Export Data
+// Export Button
 exportButton.addEventListener('click', () => {
-    const chartData = getChartData();
-    const dataKey = dataKeySelect.value;
-    
-    const exportData = chartData.map(d => ({
-        Week: d.week,
-        [dataKey]: d.value
-    }));
-    
+    const xColumn = xAxisSelect.value;
+    if (!xColumn || selectedYColumns.length === 0) return;
+
+    const exportData = data.map(row => {
+        const newRow = { [xColumn]: row[xColumn] };
+        selectedYColumns.forEach(col => {
+            newRow[col] = row[col];
+        });
+        return newRow;
+    });
+
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Week Analysis");
-    XLSX.writeFile(wb, "week_analysis.xlsx");
+    XLSX.utils.book_append_sheet(wb, ws, "Data");
+    XLSX.writeFile(wb, "export_data.xlsx");
 });
 
-// Chart settings change listeners
-dataKeySelect.addEventListener('change', updateChart);
-chartTypeSelect.addEventListener('change', updateChart);
+// Reset Button
+resetButton.addEventListener('click', () => {
+    if (confirm('Weet je zeker dat je alle data wilt resetten?')) {
+        data = [];
+        columns = [];
+        selectedYColumns = [];
+        fileName = '';
+        fileInput.value = '';
+        fileStatus.textContent = 'Geen bestand gekozen';
+        settingsCard.style.display = 'none';
+        chartCard.style.display = 'none';
+        emptyState.style.display = 'block';
+        if (chart) {
+            chart.destroy();
+            chart = null;
+        }
+    }
+});
